@@ -407,45 +407,189 @@ def page_overview(df):
     st.dataframe(feature_info, use_container_width=True)
 
 def page_eda(df):
-    """Exploratory Data Analysis Page"""
-    st.markdown("# 🔬 Exploratory Data Analysis")
-    st.markdown("Explore the thyroid cancer dataset with interactive visualizations.")
+    """Exploratory Data Analysis page"""
+    st.markdown('# 🔍 Exploratory Data Analysis')
+    st.markdown("### Interactive Data Exploration and Visualization")
     
-    st.markdown("## 📊 Basic Statistics")
-    st.dataframe(df.describe(include='all'), use_container_width=True)
+    if df.empty:
+        st.warning("No data available for EDA.")
+        return
     
-    st.markdown("## 🧩 Feature Distribution")
+    # Sidebar filters
+    st.sidebar.markdown("## 🎛️ Filter Controls")
     
-    numeric_cols = df.select_dtypes(include=['int64', 'float64']).columns.tolist()
-    categorical_cols = df.select_dtypes(include=['object']).columns.tolist()
+    # Convert Recurred for analysis
+    df_analysis = df.copy()
+    if 'Recurred' in df_analysis.columns:
+        df_analysis['Recurred_Numeric'] = df_analysis['Recurred'].apply(
+            lambda x: 1 if x == 'Yes' or x == 1 else 0
+        )
     
-    tab1, tab2 = st.tabs(["Numeric Features", "Categorical Features"])
+    st.markdown("---")
     
-    with tab1:
-        if numeric_cols:
-            num_col = st.selectbox("Select Numeric Feature", numeric_cols, key="eda_num_col")
-            fig = px.histogram(df, x=num_col, nbins=30, marginal="box", title=f"Distribution of {num_col}")
-            st.plotly_chart(fig, use_container_width=True)
-        else:
-            st.info("No numeric columns found in the dataset.")
+    # 1. Target Distribution
+    st.markdown("## 📊 Target Variable Distribution")
+    col1, col2 = st.columns(2)
     
-    with tab2:
-        if categorical_cols:
-            cat_col = st.selectbox("Select Categorical Feature", categorical_cols, key="eda_cat_col")
-            color_col = 'Recurred' if 'Recurred' in df.columns else None
-            fig = px.histogram(df, x=cat_col, color=color_col,
-                               barmode='group', title=f"Distribution of {cat_col}")
-            st.plotly_chart(fig, use_container_width=True)
-        else:
-            st.info("No categorical columns found in the dataset.")
+    with col1:
+        if 'Recurred' in df_analysis.columns:
+            recurred_counts = df_analysis['Recurred'].value_counts()
+            fig_pie = px.pie(
+                values=recurred_counts.values,
+                names=recurred_counts.index,
+                title="Recurrence Distribution",
+                color_discrete_sequence=px.colors.qualitative.Set3
+            )
+            fig_pie.update_traces(textposition='inside', textinfo='percent+label')
+            st.plotly_chart(fig_pie, use_container_width=True)
     
-    st.markdown("## 🔗 Correlation Heatmap (Numeric Features)")
-    if len(numeric_cols) > 1:
-        corr = df[numeric_cols].corr()
-        fig_corr = px.imshow(corr, text_auto=".2f", title="Correlation Matrix")
+    with col2:
+        if 'Recurred' in df_analysis.columns:
+            recurred_counts = df_analysis['Recurred'].value_counts()
+            fig_bar = px.bar(
+                x=recurred_counts.index,
+                y=recurred_counts.values,
+                title="Recurrence Count",
+                labels={'x': 'Recurred', 'y': 'Count'},
+                color=recurred_counts.values,
+                color_continuous_scale='Blues'
+            )
+            st.plotly_chart(fig_bar, use_container_width=True)
+    
+    st.markdown("---")
+    
+    # 2. Age Distribution
+    st.markdown("## 👥 Age Distribution Analysis")
+    col1, col2 = st.columns(2)
+    
+    with col1:
+        if 'Age' in df_analysis.columns:
+            fig_age = px.histogram(
+                df_analysis,
+                x='Age',
+                nbins=20,
+                title="Age Distribution",
+                color_discrete_sequence=['#667eea'],
+                marginal="box"
+            )
+            fig_age.update_layout(showlegend=False)
+            st.plotly_chart(fig_age, use_container_width=True)
+    
+    with col2:
+        if 'Age' in df_analysis.columns and 'Recurred' in df_analysis.columns:
+            fig_age_recur = px.box(
+                df_analysis,
+                x='Recurred',
+                y='Age',
+                title="Age vs Recurrence",
+                color='Recurred',
+                color_discrete_map={'Yes': '#ff4757', 'No': '#2ed573'}
+            )
+            st.plotly_chart(fig_age_recur, use_container_width=True)
+    
+    st.markdown("---")
+    
+    # 3. Categorical Features Analysis
+    st.markdown("## 📈 Categorical Features Analysis")
+    
+    categorical_cols = df_analysis.select_dtypes(include=['object']).columns.tolist()
+    if 'Recurred' in categorical_cols:
+        categorical_cols.remove('Recurred')
+    
+    if categorical_cols:
+        selected_cat = st.selectbox("Select Categorical Feature", categorical_cols)
+        
+        col1, col2 = st.columns(2)
+        
+        with col1:
+            # Count plot
+            cat_counts = df_analysis[selected_cat].value_counts()
+            fig_cat = px.bar(
+                x=cat_counts.index,
+                y=cat_counts.values,
+                title=f"{selected_cat} Distribution",
+                labels={'x': selected_cat, 'y': 'Count'},
+                color=cat_counts.values,
+                color_continuous_scale='Viridis'
+            )
+            st.plotly_chart(fig_cat, use_container_width=True)
+        
+        with col2:
+            # Stacked bar chart with Recurred
+            if 'Recurred' in df_analysis.columns:
+                cross_tab = pd.crosstab(df_analysis[selected_cat], df_analysis['Recurred'])
+                fig_stacked = px.bar(
+                    cross_tab,
+                    title=f"{selected_cat} vs Recurrence",
+                    labels={'value': 'Count', 'index': selected_cat},
+                    color_discrete_map={'Yes': '#ff4757', 'No': '#2ed573'}
+                )
+                fig_stacked.update_layout(barmode='stack')
+                st.plotly_chart(fig_stacked, use_container_width=True)
+    
+    st.markdown("---")
+    
+    # 4. Correlation Analysis
+    st.markdown("## 🔗 Correlation Analysis")
+    
+    numeric_cols = df_analysis.select_dtypes(include=[np.number]).columns.tolist()
+    if numeric_cols:
+        corr_matrix = df_analysis[numeric_cols].corr()
+        
+        fig_corr = px.imshow(
+            corr_matrix,
+            title="Correlation Matrix",
+            color_continuous_scale='RdBu',
+            aspect='auto',
+            labels=dict(color="Correlation")
+        )
         st.plotly_chart(fig_corr, use_container_width=True)
-    else:
-        st.info("Not enough numeric features for correlation analysis.")
+        
+        # Display correlation with target
+        if 'Recurred_Numeric' in numeric_cols:
+            st.markdown("### Correlation with Recurrence")
+            target_corr = corr_matrix['Recurred_Numeric'].sort_values(ascending=False)
+            target_corr = target_corr[target_corr.index != 'Recurred_Numeric']
+            
+            fig_target_corr = px.bar(
+                x=target_corr.values,
+                y=target_corr.index,
+                orientation='h',
+                title="Feature Correlation with Recurrence",
+                labels={'x': 'Correlation', 'y': 'Feature'},
+                color=target_corr.values,
+                color_continuous_scale='RdYlGn'
+            )
+            st.plotly_chart(fig_target_corr, use_container_width=True)
+    
+    st.markdown("---")
+    
+    # 5. Risk Level Analysis
+    if 'Risk' in df_analysis.columns:
+        st.markdown("## ⚠️ Risk Level Analysis")
+        col1, col2 = st.columns(2)
+        
+        with col1:
+            risk_counts = df_analysis['Risk'].value_counts()
+            fig_risk = px.pie(
+                values=risk_counts.values,
+                names=risk_counts.index,
+                title="Risk Level Distribution",
+                color_discrete_sequence=px.colors.sequential.Reds_r
+            )
+            st.plotly_chart(fig_risk, use_container_width=True)
+        
+        with col2:
+            if 'Recurred' in df_analysis.columns:
+                risk_recur = pd.crosstab(df_analysis['Risk'], df_analysis['Recurred'])
+                fig_risk_recur = px.bar(
+                    risk_recur,
+                    title="Risk Level vs Recurrence",
+                    labels={'value': 'Count'},
+                    color_discrete_map={'Yes': '#ff4757', 'No': '#2ed573'}
+                )
+                fig_risk_recur.update_layout(barmode='group')
+                st.plotly_chart(fig_risk_recur, use_container_width=True)
 
 def page_model_performance():
     """Model Performance Comparison Page"""
