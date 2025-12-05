@@ -359,52 +359,118 @@ def page_overview(df):
     st.markdown('<div class="main-header">Thyroid Cancer Recurrence Prediction</div>', unsafe_allow_html=True)
     st.markdown('<div class="sub-header">An AI-powered clinical decision support tool to assess recurrence risk in thyroid cancer patients.</div>', unsafe_allow_html=True)
     
-    # Dataset Summary Cards
-    st.markdown("## 📊 Dataset Summary")
-    col1, col2, col3, col4 = st.columns(4)
-    
-    with col1:
-        st.metric("🧪 Total Patients", len(df))
-    with col2:
+    st.image("overview.png", caption="High-level overview of the Thyroid Cancer Recurrence Prediction project", use_container_width=True)
+    st.markdown("---")
+
+    # Hero section with two columns
+    hero_col1, hero_col2 = st.columns([2, 1])
+    with hero_col1:
+        st.markdown("### 👩‍⚕️ Why this app matters")
+        st.write(
+            """This tool turns complex thyroid cancer follow-up data into an **intuitive risk story**.
+            Explore the patient population, uncover hidden patterns, and simulate individual risk profiles –
+            all in one interactive space designed for clinicians and researchers."""
+        )
+        st.markdown("#### 💡 Try this:")
+        st.markdown("- Hover on the **timeline** to see how the cohort looks by age and recurrence")
+        st.markdown("- Use the **scenario explorer** to imagine different patient profiles")
+        st.markdown("- Jump to the **Prediction** page when you're ready to score a real patient")
+    with hero_col2:
+        st.markdown("### 🧭 Quick Navigation")
+        st.markdown("- 🔍 *Use the sidebar to explore EDA*")
+        st.markdown("- 📈 *Compare models on the Model Performance page*")
+        st.markdown("- 🤖 *Predict an individual patient's recurrence risk*")
+
+    # Dataset at a glance – animated style cards
+    st.markdown("## ✨ Dataset at a Glance")
+    if not df.empty:
+        total_patients = len(df)
+        num_features = len(df.columns) - (1 if 'Recurred' in df.columns else 0)
         if 'Recurred' in df.columns:
-            num_recurred = df['Recurred'].apply(lambda x: 1 if x == 'Yes' or x == 1 else 0).sum()
-            st.metric("⚕️ Recurrence Cases", num_recurred)
+            recurred_numeric = df['Recurred'].apply(lambda x: 1 if x in ['Yes', 1, 'YES', 'yes'] else 0)
+            num_recurred = int(recurred_numeric.sum())
+            recurrence_rate = float(recurred_numeric.mean() * 100)
         else:
-            st.metric("⚕️ Recurrence Cases", "N/A")
-    with col3:
-        st.metric("🔬 Features", len(df.columns) - 1)
-    with col4:
-        if 'Recurred' in df.columns:
-            rate = df['Recurred'].apply(lambda x: 1 if x == 'Yes' or x == 1 else 0).mean() * 100
-            st.metric("📈 Recurrence Rate", f"{rate:.1f}%")
-        else:
-            st.metric("📈 Recurrence Rate", "N/A")
+            num_recurred = None
+            recurrence_rate = None
+        
+        c1, c2, c3, c4 = st.columns(4)
+        with c1:
+            st.markdown('<div class="stat-card">', unsafe_allow_html=True)
+            st.markdown('<div class="stat-label">Total Patients</div>', unsafe_allow_html=True)
+            st.markdown(f'<div class="stat-value">{total_patients}</div>', unsafe_allow_html=True)
+            st.markdown('<div class="stat-caption">Complete clinical records</div>', unsafe_allow_html=True)
+            st.markdown('</div>', unsafe_allow_html=True)
+        with c2:
+            st.markdown('<div class="stat-card">', unsafe_allow_html=True)
+            st.markdown('<div class="stat-label">Recurrence Cases</div>', unsafe_allow_html=True)
+            value = num_recurred if num_recurred is not None else 'N/A'
+            st.markdown(f'<div class="stat-value">{value}</div>', unsafe_allow_html=True)
+            st.markdown('<div class="stat-caption">Patients with documented recurrence</div>', unsafe_allow_html=True)
+            st.markdown('</div>', unsafe_allow_html=True)
+        with c3:
+            st.markdown('<div class="stat-card">', unsafe_allow_html=True)
+            st.markdown('<div class="stat-label">Model Features</div>', unsafe_allow_html=True)
+            st.markdown(f'<div class="stat-value">{num_features}</div>', unsafe_allow_html=True)
+            st.markdown('<div class="stat-caption">Clinical and pathological signals</div>', unsafe_allow_html=True)
+            st.markdown('</div>', unsafe_allow_html=True)
+        with c4:
+            st.markdown('<div class="stat-card">', unsafe_allow_html=True)
+            st.markdown('<div class="stat-label">Recurrence Rate</div>', unsafe_allow_html=True)
+            value = f"{recurrence_rate:.1f}%" if recurrence_rate is not None else 'N/A'
+            st.markdown(f'<div class="stat-value">{value}</div>', unsafe_allow_html=True)
+            st.markdown('<div class="stat-caption">Overall cohort risk level</div>', unsafe_allow_html=True)
+            st.markdown('</div>', unsafe_allow_html=True)
+    else:
+        st.warning("Dataset could not be loaded. Please ensure `Thyroid_Diff.csv` is available.")
+
+    st.markdown("---")
+
+    # Interactive cohort snapshot
+    if not df.empty and 'Age' in df.columns and 'Recurred' in df.columns:
+        st.markdown("## 🩺 Cohort Snapshot")
+        col_left, col_right = st.columns([3, 2])
+        
+        with col_left:
+            st.markdown("### Age vs Recurrence")
+            tmp = df.copy()
+            tmp['Recurred_Numeric'] = tmp['Recurred'].apply(lambda x: 1 if x in ['Yes', 1, 'YES', 'yes'] else 0)
+            fig = px.scatter(
+                tmp,
+                x='Age',
+                y='Recurred_Numeric',
+                color='Recurred',
+                hover_data=[col for col in df.columns if col not in ['Recurred_Numeric']],
+                labels={'Recurred_Numeric': 'Recurrence'},
+                title="Each dot is a patient"
+            )
+            fig.update_yaxes(tickvals=[0, 1], ticktext=['No', 'Yes'])
+            st.plotly_chart(fig, use_container_width=True)
+        
+        with col_right:
+            st.markdown("### Scenario Explorer")
+            age_slider = st.slider("Simulated patient age", int(df['Age'].min()), int(df['Age'].max()), int(df['Age'].median()))
+            if 'Sex' in df.columns:
+                sex_choice = st.selectbox("Sex", sorted(df['Sex'].dropna().unique()))
+            else:
+                sex_choice = None
+            st.write("This scenario explorer doesn't run a model here – it prepares you to jump to the **Prediction** page with a concrete patient in mind.")
     
     st.markdown("---")
-    
-    # Project Description
-    st.markdown("## 📋 Project Objective")
-    st.write("""
-    This application helps clinicians and researchers:
-    - Analyze thyroid cancer patient data
-    - Understand key recurrence risk factors
-    - Compare multiple machine learning models
-    - Make individualized recurrence risk predictions
-    """)
-    
-    # Dataset Preview
-    st.markdown("## 🔍 Dataset Preview")
-    st.dataframe(df.head(10), use_container_width=True)
-    
-    # Feature Information
-    st.markdown("## 🧬 Feature Information")
-    feature_info = pd.DataFrame({
-        'Feature': df.columns,
-        'Data Type': df.dtypes.astype(str),
-        'Unique Values': [df[col].nunique() for col in df.columns],
-        'Missing Values': df.isnull().sum().values
-    })
-    st.dataframe(feature_info, use_container_width=True)
+
+    # Dataset structure preview in tabs
+    st.markdown("## 📚 Data Explorer")
+    tab1, tab2 = st.tabs(["Sample Rows", "Feature Summary"])
+    with tab1:
+        st.dataframe(df.head(15), use_container_width=True)
+    with tab2:
+        feature_info = pd.DataFrame({
+            'Feature': df.columns,
+            'Data Type': df.dtypes.astype(str),
+            'Unique Values': [df[col].nunique() for col in df.columns],
+            'Missing Values': df.isnull().sum().values
+        })
+        st.dataframe(feature_info, use_container_width=True)
 
 def page_eda(df):
     """Exploratory Data Analysis page"""
